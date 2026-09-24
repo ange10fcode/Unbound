@@ -3,7 +3,17 @@
 </p>
 
 <h1 align="center">Unbound</h1>
+## Download
 
+### Windows 10/11
+
+**[Download Unbound for Windows](https://github.com/ange10fcode/Unbound/releases/latest/download/Unbound.exe)**
+
+Download `Unbound.exe` and run it. No .NET installation is required.
+
+### Windows ARM64
+
+**[Download Unbound for ARM64](https://github.com/ange10fcode/Unbound/releases/latest/download/Unbound-arm64.exe)**
 <p align="center">
   A small Windows utility for finding file locks, unlocking files and folders, and permanently removing stubborn items.
 </p>
