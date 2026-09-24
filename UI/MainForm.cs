@@ -14,8 +14,10 @@ public sealed class MainForm : Form
     private readonly ListBox _files = new();
     private readonly Label _status = new();
     private readonly Label _emptyState = new();
+    private readonly Label _installStatus = new();
     private readonly Label _explorerStatus = new();
     private readonly CheckBox _rebootDelete = new();
+    private readonly Button _installButton = new();
     private readonly Button _explorerButton = new();
 
     private static readonly Color Bg = Color.FromArgb(15, 17, 21);
@@ -35,8 +37,8 @@ public sealed class MainForm : Form
     public MainForm()
     {
         Text = "Unbound";
-        ClientSize = new Size(840, 590);
-        MinimumSize = new Size(740, 520);
+        ClientSize = new Size(840, 640);
+        MinimumSize = new Size(740, 570);
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Bg;
         ForeColor = TextMain;
@@ -54,7 +56,7 @@ public sealed class MainForm : Form
         Shown += (_, _) =>
         {
             Win11Style.Apply(Handle);
-            RefreshExplorerState();
+            RefreshSettingsState();
             UpdateQueueUi();
         };
 
@@ -96,7 +98,7 @@ public sealed class MainForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 104));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 154));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
 
@@ -280,7 +282,7 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 2,
+            RowCount = 3,
             BackColor = Surface,
             Margin = new Padding(0),
             Padding = new Padding(0)
@@ -288,36 +290,29 @@ public sealed class MainForm : Form
 
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 72));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 58));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 42));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 34));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 34));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 32));
 
-        var infoPanel = new Panel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Surface,
-            Margin = new Padding(0)
-        };
+        var installInfo = BuildSettingsInfo(
+            "App installation",
+            _installStatus);
 
-        var explorerTitle = new Label
-        {
-            Text = "Explorer integration",
-            AutoSize = true,
-            Location = new Point(0, 1),
-            Font = new Font("Segoe UI Semibold", 9.5f),
-            ForeColor = TextMain
-        };
+        ConfigureButton(
+            _installButton,
+            "Install",
+            SurfaceButton,
+            SurfaceHover,
+            margin: new Padding(10, 3, 0, 5));
+        _installButton.Click += (_, _) => ToggleInstallation();
 
-        _explorerStatus.AutoSize = true;
-        _explorerStatus.Location = new Point(0, 25);
-        _explorerStatus.Font = new Font("Segoe UI", 8.7f);
-        _explorerStatus.ForeColor = TextDim;
-
-        infoPanel.Controls.Add(explorerTitle);
-        infoPanel.Controls.Add(_explorerStatus);
+        var explorerInfo = BuildSettingsInfo(
+            "Explorer right-click menu",
+            _explorerStatus);
 
         ConfigureButton(
             _explorerButton,
-            "Install",
+            "Add",
             SurfaceButton,
             SurfaceHover,
             margin: new Padding(10, 3, 0, 5));
@@ -331,13 +326,43 @@ public sealed class MainForm : Form
         _rebootDelete.Margin = new Padding(0, 3, 0, 0);
         _rebootDelete.Font = new Font("Segoe UI", 9f);
 
-        layout.Controls.Add(infoPanel, 0, 0);
-        layout.Controls.Add(_explorerButton, 1, 0);
-        layout.Controls.Add(_rebootDelete, 0, 1);
+        layout.Controls.Add(installInfo, 0, 0);
+        layout.Controls.Add(_installButton, 1, 0);
+        layout.Controls.Add(explorerInfo, 0, 1);
+        layout.Controls.Add(_explorerButton, 1, 1);
+        layout.Controls.Add(_rebootDelete, 0, 2);
         layout.SetColumnSpan(_rebootDelete, 2);
 
         card.Controls.Add(layout);
         return card;
+    }
+
+    private Control BuildSettingsInfo(string title, Label statusLabel)
+    {
+        var panel = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Surface,
+            Margin = new Padding(0)
+        };
+
+        var titleLabel = new Label
+        {
+            Text = title,
+            AutoSize = true,
+            Location = new Point(0, 1),
+            Font = new Font("Segoe UI Semibold", 9.5f),
+            ForeColor = TextMain
+        };
+
+        statusLabel.AutoSize = true;
+        statusLabel.Location = new Point(0, 25);
+        statusLabel.Font = new Font("Segoe UI", 8.7f);
+        statusLabel.ForeColor = TextDim;
+
+        panel.Controls.Add(titleLabel);
+        panel.Controls.Add(statusLabel);
+        return panel;
     }
 
     private Control BuildHelperText()
@@ -504,6 +529,86 @@ public sealed class MainForm : Form
         };
     }
 
+    private void RefreshSettingsState()
+    {
+        RefreshInstallationState();
+        RefreshExplorerState();
+    }
+
+    private void RefreshInstallationState()
+    {
+        bool installed = AppInstallation.IsInstalled();
+
+        _installStatus.Text = installed
+            ? "●  Installed — Start menu and Windows Apps entry are ready"
+            : "Portable mode — install for Start menu access and clean uninstall";
+
+        _installStatus.ForeColor = installed ? Green : TextDim;
+        _installButton.Text = installed ? "Uninstall" : "Install";
+        _installButton.BackColor = SurfaceButton;
+        _installButton.FlatAppearance.MouseOverBackColor = SurfaceHover;
+        _installButton.FlatAppearance.MouseDownBackColor = ControlPaint.Dark(SurfaceButton, 0.06f);
+    }
+
+    private void ToggleInstallation()
+    {
+        try
+        {
+            if (AppInstallation.IsInstalled())
+            {
+                DialogResult result = MessageBox.Show(
+                    this,
+                    "Uninstall Unbound for this Windows user?\n\nThis removes the Start menu shortcut, Explorer commands, Windows Apps entry, and installed program files.",
+                    "Unbound",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
+
+                if (result != DialogResult.Yes)
+                    return;
+
+                bool exitRequired = AppInstallation.Uninstall();
+                _status.Text = "Unbound uninstalled";
+                RefreshSettingsState();
+
+                MessageBox.Show(
+                    this,
+                    exitRequired
+                        ? "Unbound has been uninstalled. The app will now close so Windows can remove the final program file."
+                        : "Unbound has been uninstalled.",
+                    "Unbound",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+
+                if (exitRequired)
+                    Application.Exit();
+
+                return;
+            }
+
+            string installedPath = AppInstallation.Install();
+            _status.Text = "Unbound installed";
+            RefreshSettingsState();
+
+            MessageBox.Show(
+                this,
+                "Unbound is installed for your Windows account.\n\n" +
+                $"Installed to:\n{installedPath}\n\n" +
+                "A Start menu shortcut, Windows Apps uninstall entry, and Explorer right-click commands were added.",
+                "Unbound",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Unbound",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
     private void RefreshExplorerState()
     {
         bool installed = ExplorerIntegration.IsInstalled();
@@ -513,7 +618,7 @@ public sealed class MainForm : Form
             : "Not installed — adds Unlock and Force delete to Explorer";
 
         _explorerStatus.ForeColor = installed ? Green : TextDim;
-        _explorerButton.Text = installed ? "Remove" : "Install";
+        _explorerButton.Text = installed ? "Remove" : "Add";
         _explorerButton.BackColor = SurfaceButton;
         _explorerButton.FlatAppearance.MouseOverBackColor = SurfaceHover;
         _explorerButton.FlatAppearance.MouseDownBackColor = ControlPaint.Dark(SurfaceButton, 0.06f);
@@ -553,7 +658,7 @@ public sealed class MainForm : Form
                     MessageBoxIcon.Information);
             }
 
-            RefreshExplorerState();
+            RefreshSettingsState();
         }
         catch (Exception ex)
         {
@@ -622,14 +727,29 @@ public sealed class MainForm : Form
             }
             catch (Exception ex)
             {
-                if (_rebootDelete.Checked && FileTools.ScheduleDelete(path))
+                bool scheduledForReboot = false;
+                string failureMessage = ex.Message;
+
+                if (_rebootDelete.Checked)
+                {
+                    try
+                    {
+                        scheduledForReboot = FileTools.ScheduleDelete(path);
+                    }
+                    catch (Exception scheduleEx)
+                    {
+                        failureMessage = scheduleEx.Message;
+                    }
+                }
+
+                if (scheduledForReboot)
                 {
                     _files.Items.Remove(path);
                     scheduled++;
                 }
                 else
                 {
-                    failures.Add((path, ex.Message));
+                    failures.Add((path, failureMessage));
                 }
             }
         }

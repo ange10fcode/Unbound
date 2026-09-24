@@ -26,6 +26,14 @@ public static class ShellCommandRouter
                 HandleDelete(args.Skip(1));
                 return true;
 
+            case "--install":
+                HandleInstall();
+                return true;
+
+            case "--uninstall":
+                HandleUninstall();
+                return true;
+
             case "--install-menu":
                 HandleInstallMenu();
                 return true;
@@ -118,6 +126,61 @@ public static class ShellCommandRouter
             "Unbound",
             MessageBoxButtons.OK,
             stillFailed == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+    }
+
+
+    private static void HandleInstall()
+    {
+        try
+        {
+            string installedPath = AppInstallation.Install();
+            MessageBox.Show(
+                $"Unbound installed successfully.\n\nInstalled to:\n{installedPath}\n\nA Start menu shortcut and Explorer commands were added.",
+                "Unbound",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                ex.Message,
+                "Unbound",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
+    private static void HandleUninstall()
+    {
+        DialogResult answer = MessageBox.Show(
+            "Uninstall Unbound for this Windows user?\n\nThis removes the Start menu shortcut, Explorer right-click commands, Apps entry, and installed program files.",
+            "Unbound",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question);
+
+        if (answer != DialogResult.Yes)
+            return;
+
+        try
+        {
+            bool exitRequired = AppInstallation.Uninstall();
+
+            MessageBox.Show(
+                exitRequired
+                    ? "Unbound has been uninstalled. This window will now close so Windows can remove the final program file."
+                    : "Unbound has been uninstalled.",
+                "Unbound",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                ex.Message,
+                "Unbound",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
     }
 
     private static void HandleInstallMenu()

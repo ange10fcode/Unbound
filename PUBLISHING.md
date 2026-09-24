@@ -28,6 +28,7 @@ Before publishing, test at least:
 - drag and drop,
 - Unlock on a file you intentionally have open in another non-critical app,
 - Force delete on a disposable test file/folder,
+- one-click app installation and uninstall,
 - Explorer installation and removal,
 - right-click commands on both a file and a folder.
 
@@ -55,19 +56,36 @@ git push -u origin main
 
 Replace `YOUR_USERNAME` with your GitHub username.
 
+### Updating an existing Unbound repository
+
+If `origin` is already configured and you are pushing this v1.1.0 update, copy these files over your existing local repository, then run:
+
+```bash
+git add .
+git commit -m "Add one-click install and uninstall"
+git push
+```
+
+After the Build workflow passes, create the release tag:
+
+```bash
+git tag v1.1.0
+git push origin v1.1.0
+```
+
 ## 4. Check GitHub Actions
 
 Open the repository's **Actions** tab. The `Build` workflow should compile `win-x64` and `win-arm64` on GitHub's Windows runner.
 
 If that workflow passes, you have an independent clean build of the repository.
 
-## 5. Create the v1.0.0 release
+## 5. Create the v1.1.0 release
 
 The release workflow is tag-driven. Run:
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.1.0
+git push origin v1.1.0
 ```
 
 GitHub Actions will build the release and create a GitHub Release with:

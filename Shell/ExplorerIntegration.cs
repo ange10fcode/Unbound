@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using System.Windows.Forms;
+using System.Runtime.InteropServices;
 using Microsoft.Win32;
 
 namespace Unbound.Shell;
@@ -9,14 +9,15 @@ public static class ExplorerIntegration
 {
     private const string FileBase = @"Software\Classes\*\shell";
     private const string FolderBase = @"Software\Classes\Directory\shell";
+    private const uint ShcneAssocChanged = 0x08000000;
+    private const uint ShcnfIdList = 0x0000;
 
-    private static string StableInstallDirectory =>
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Unbound");
-
-    private static string StableExecutablePath =>
-        Path.Combine(StableInstallDirectory, "Unbound.exe");
+    [DllImport("shell32.dll")]
+    private static extern void SHChangeNotify(
+        uint wEventId,
+        uint uFlags,
+        IntPtr dwItem1,
+        IntPtr dwItem2);
 
     public static bool IsInstalled()
     {
@@ -31,11 +32,23 @@ public static class ExplorerIntegration
                folderDelete is not null;
     }
 
-    public static string Install()
+    public static string Install(string? executablePath = null)
     {
         RemoveLegacyKeys();
 
-        string registeredExecutable = EnsureStableExecutable();
+        string registeredExecutable;
+        if (string.IsNullOrWhiteSpace(executablePath))
+        {
+            AppInstallation.Install(installExplorerIntegration: false);
+            registeredExecutable = AppInstallation.InstalledExecutablePath;
+        }
+        else
+        {
+            registeredExecutable = Path.GetFullPath(executablePath);
+        }
+
+        if (!File.Exists(registeredExecutable))
+            throw new FileNotFoundException("The Unbound executable to register was not found.", registeredExecutable);
 
         AddMenu(
             $@"{FileBase}\UnboundUnlock",
@@ -61,6 +74,7 @@ public static class ExplorerIntegration
             $"\"{registeredExecutable}\" --delete \"%1\"",
             registeredExecutable);
 
+        RefreshExplorerAssociations();
         return registeredExecutable;
     }
 
@@ -71,38 +85,7 @@ public static class ExplorerIntegration
         DeleteTree($@"{FolderBase}\UnboundUnlock");
         DeleteTree($@"{FolderBase}\UnboundDelete");
         RemoveLegacyKeys();
-    }
-
-    private static string EnsureStableExecutable()
-    {
-        string currentExecutable = Application.ExecutablePath;
-        string currentFullPath = Path.GetFullPath(currentExecutable);
-        string stableFullPath = Path.GetFullPath(StableExecutablePath);
-
-        if (string.Equals(currentFullPath, stableFullPath, StringComparison.OrdinalIgnoreCase))
-            return stableFullPath;
-
-        // Framework-dependent/dev builds need their adjacent DLLs, so do not copy
-        // only the apphost executable. Published single-file releases have no sibling
-        // Unbound.dll and can safely be copied to a stable Explorer location.
-        string siblingDll = Path.ChangeExtension(currentFullPath, ".dll");
-        if (File.Exists(siblingDll))
-            return currentFullPath;
-
-        Directory.CreateDirectory(StableInstallDirectory);
-
-        try
-        {
-            File.Copy(currentFullPath, stableFullPath, overwrite: true);
-        }
-        catch (IOException ex)
-        {
-            throw new IOException(
-                "Unbound could not update its Explorer copy. Close any other Unbound windows or Explorer actions and try again.",
-                ex);
-        }
-
-        return stableFullPath;
+        RefreshExplorerAssociations();
     }
 
     private static void AddMenu(
@@ -147,7 +130,19 @@ public static class ExplorerIntegration
         }
         catch
         {
-            // Best-effort cleanup. The caller can reinstall if a stale key remains.
+            // Best-effort cleanup. The app can retry on the next install/uninstall.
+        }
+    }
+
+    private static void RefreshExplorerAssociations()
+    {
+        try
+        {
+            SHChangeNotify(ShcneAssocChanged, ShcnfIdList, IntPtr.Zero, IntPtr.Zero);
+        }
+        catch
+        {
+            // Explorer will refresh on its own eventually if this notification fails.
         }
     }
 }

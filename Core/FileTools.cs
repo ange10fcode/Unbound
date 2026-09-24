@@ -22,6 +22,7 @@ public static class FileTools
             throw new ArgumentException("Path cannot be empty.", nameof(path));
 
         path = Path.GetFullPath(path);
+        DeletionGuard.ThrowIfProtected(path);
 
         FileAttributes attributes;
         try
@@ -63,6 +64,7 @@ public static class FileTools
             return false;
 
         path = Path.GetFullPath(path);
+        DeletionGuard.ThrowIfProtected(path);
 
         FileAttributes attributes;
         try

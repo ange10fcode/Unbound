@@ -16,13 +16,24 @@
 - Refuse to automatically terminate protected Windows processes.
 - Force-delete files, folders, and read-only items.
 - Optionally schedule locked items for deletion after reboot.
+- Install Unbound for the current Windows user with one click — no administrator prompt required.
+- Add a Start menu shortcut and a normal **Settings → Apps** uninstall entry.
 - Add **Unlock with Unbound** and **Force delete with Unbound** to Explorer for **every file and folder**.
-- Install Explorer integration per-user without machine-wide registry changes.
+- Uninstall cleanly from inside the app or from Windows Settings.
+- Refuse to delete its own running or installed folder; use the Uninstall button instead.
 - Run without telemetry, accounts, network requests, or a background service.
 
 ## Download
 
 For normal use, download the current Windows package from the repository's **Releases** page and run `Unbound.exe`.
+
+You can keep using it as a portable app, or click **Install** in Unbound to install it for your Windows account. The installed copy is placed in:
+
+```text
+%LOCALAPPDATA%\Programs\Unbound\Unbound.exe
+```
+
+Installation adds a Start menu shortcut, a Windows Apps uninstall entry, and Explorer right-click commands. No administrator rights are required.
 
 Prebuilt releases are self-contained; the .NET runtime does not need to be installed separately.
 
@@ -65,15 +76,29 @@ You can also use PowerShell:
 .\scripts\publish.ps1
 ```
 
-## Explorer integration
+## Install and uninstall
 
-The Settings section in Unbound can install or remove Explorer integration. When installed, the release executable is copied to:
+The **App installation** row in Unbound provides one-click per-user installation and uninstall.
 
-```text
-%LOCALAPPDATA%\Unbound\Unbound.exe
+Install adds:
+
+- `%LOCALAPPDATA%\Programs\Unbound\Unbound.exe`
+- a Start menu shortcut,
+- a normal Windows **Settings → Apps** uninstall entry,
+- Explorer right-click commands for files and folders.
+
+Uninstall removes those items and safely cleans up the running executable after the app exits. Unbound also blocks force-deleting its own executable or installation folder so Explorer entries cannot be left behind accidentally.
+
+Command-line equivalents:
+
+```cmd
+Unbound.exe --install
+Unbound.exe --uninstall
 ```
 
-That stable copy keeps the right-click commands working if the original downloaded EXE is later moved.
+## Explorer integration
+
+Explorer integration can also be added or removed independently from the app. If you add Explorer integration while running the portable build, Unbound installs a stable per-user copy automatically so the right-click entries do not break when the downloaded EXE moves.
 
 The per-user registry entries are:
 
@@ -86,7 +111,7 @@ HKCU\Software\Classes\Directory\shell\UnboundDelete
 
 On Windows 11, classic shell commands can appear under **Show more options**.
 
-The commands can also be managed from a terminal:
+Explorer commands can also be managed from a terminal:
 
 ```cmd
 Unbound.exe --install-menu
