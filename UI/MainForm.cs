@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using Unbound.Core;
-using Unbound.Shell;
 
 namespace Unbound.UI;
 
@@ -14,11 +13,6 @@ public sealed class MainForm : Form
     private readonly ListBox _files = new();
     private readonly Label _status = new();
     private readonly Label _emptyState = new();
-    private readonly Label _installStatus = new();
-    private readonly Label _explorerStatus = new();
-    private readonly CheckBox _rebootDelete = new();
-    private readonly Button _installButton = new();
-    private readonly Button _explorerButton = new();
 
     private static readonly Color Bg = Color.FromArgb(15, 17, 21);
     private static readonly Color Surface = Color.FromArgb(24, 27, 33);
@@ -32,13 +26,12 @@ public sealed class MainForm : Form
     private static readonly Color BlueHover = Color.FromArgb(65, 133, 242);
     private static readonly Color Red = Color.FromArgb(211, 55, 67);
     private static readonly Color RedHover = Color.FromArgb(226, 67, 80);
-    private static readonly Color Green = Color.FromArgb(88, 191, 126);
 
     public MainForm()
     {
         Text = "Unbound";
-        ClientSize = new Size(840, 640);
-        MinimumSize = new Size(740, 570);
+        ClientSize = new Size(840, 520);
+        MinimumSize = new Size(740, 470);
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Bg;
         ForeColor = TextMain;
@@ -56,7 +49,6 @@ public sealed class MainForm : Form
         Shown += (_, _) =>
         {
             Win11Style.Apply(Handle);
-            RefreshSettingsState();
             UpdateQueueUi();
         };
 
@@ -80,7 +72,6 @@ public sealed class MainForm : Form
         }
         catch
         {
-            // The executable already contains the project icon.
         }
     }
 
@@ -90,7 +81,7 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 6,
+            RowCount = 5,
             Padding = new Padding(28, 24, 28, 22),
             BackColor = Bg
         };
@@ -98,26 +89,41 @@ public sealed class MainForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 154));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
 
         root.Controls.Add(BuildHeader(), 0, 0);
         root.Controls.Add(BuildDropArea(), 0, 1);
         root.Controls.Add(BuildPrimaryActions(), 0, 2);
-        root.Controls.Add(BuildSettingsCard(), 0, 3);
-        root.Controls.Add(BuildHelperText(), 0, 4);
-        root.Controls.Add(BuildFooter(), 0, 5);
+        root.Controls.Add(BuildHelperText(), 0, 3);
+        root.Controls.Add(BuildFooter(), 0, 4);
 
         Controls.Add(root);
     }
 
     private Control BuildHeader()
     {
-        var header = new Panel
+        var header = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            BackColor = Bg
+            ColumnCount = 2,
+            RowCount = 1,
+            BackColor = Bg,
+            Margin = new Padding(0),
+            Padding = new Padding(0)
+        };
+
+        // Let the brand use all remaining room while reserving a stable, DPI-safe
+        // area for the Settings button. Docking the button directly in this cell
+        // avoids the clipped sliver that could appear with the old nested panel.
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 124));
+
+        var brand = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Bg,
+            Margin = new Padding(0)
         };
 
         var logo = new PictureBox
@@ -136,7 +142,6 @@ public sealed class MainForm : Form
         }
         catch
         {
-            // Header still works without a runtime icon extraction.
         }
 
         var title = new Label
@@ -157,9 +162,35 @@ public sealed class MainForm : Form
             ForeColor = TextDim
         };
 
-        header.Controls.Add(logo);
-        header.Controls.Add(title);
-        header.Controls.Add(subtitle);
+        brand.Controls.Add(logo);
+        brand.Controls.Add(title);
+        brand.Controls.Add(subtitle);
+
+        var settings = new Button
+        {
+            Text = "Settings",
+            Dock = DockStyle.Fill,
+            Margin = new Padding(8, 5, 0, 33),
+            BackColor = SurfaceButton,
+            ForeColor = TextMain,
+            Font = new Font("Segoe UI Semibold", 9f),
+            Cursor = Cursors.Hand,
+            FlatStyle = FlatStyle.Flat,
+            UseVisualStyleBackColor = false,
+            TabStop = false
+        };
+
+        settings.FlatAppearance.BorderSize = 0;
+        settings.FlatAppearance.MouseOverBackColor = SurfaceHover;
+        settings.FlatAppearance.MouseDownBackColor = ControlPaint.Dark(SurfaceButton, 0.06f);
+        settings.Click += (_, _) =>
+        {
+            using var dialog = new SettingsForm();
+            dialog.ShowDialog(this);
+        };
+
+        header.Controls.Add(brand, 0, 0);
+        header.Controls.Add(settings, 1, 0);
         return header;
     }
 
@@ -266,110 +297,11 @@ public sealed class MainForm : Form
         return actions;
     }
 
-    private Control BuildSettingsCard()
-    {
-        var card = new RoundedPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Surface,
-            BorderColor = Border,
-            Radius = 10,
-            Padding = new Padding(14, 10, 14, 9),
-            Margin = new Padding(0, 2, 0, 8)
-        };
-
-        var layout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 3,
-            BackColor = Surface,
-            Margin = new Padding(0),
-            Padding = new Padding(0)
-        };
-
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 72));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 34));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 34));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 32));
-
-        var installInfo = BuildSettingsInfo(
-            "App installation",
-            _installStatus);
-
-        ConfigureButton(
-            _installButton,
-            "Install",
-            SurfaceButton,
-            SurfaceHover,
-            margin: new Padding(10, 3, 0, 5));
-        _installButton.Click += (_, _) => ToggleInstallation();
-
-        var explorerInfo = BuildSettingsInfo(
-            "Explorer right-click menu",
-            _explorerStatus);
-
-        ConfigureButton(
-            _explorerButton,
-            "Add",
-            SurfaceButton,
-            SurfaceHover,
-            margin: new Padding(10, 3, 0, 5));
-        _explorerButton.Click += (_, _) => ToggleExplorerMenu();
-
-        _rebootDelete.Text = "Delete locked items after reboot if immediate deletion fails";
-        _rebootDelete.AutoSize = true;
-        _rebootDelete.Anchor = AnchorStyles.Left;
-        _rebootDelete.BackColor = Surface;
-        _rebootDelete.ForeColor = TextDim;
-        _rebootDelete.Margin = new Padding(0, 3, 0, 0);
-        _rebootDelete.Font = new Font("Segoe UI", 9f);
-
-        layout.Controls.Add(installInfo, 0, 0);
-        layout.Controls.Add(_installButton, 1, 0);
-        layout.Controls.Add(explorerInfo, 0, 1);
-        layout.Controls.Add(_explorerButton, 1, 1);
-        layout.Controls.Add(_rebootDelete, 0, 2);
-        layout.SetColumnSpan(_rebootDelete, 2);
-
-        card.Controls.Add(layout);
-        return card;
-    }
-
-    private Control BuildSettingsInfo(string title, Label statusLabel)
-    {
-        var panel = new Panel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Surface,
-            Margin = new Padding(0)
-        };
-
-        var titleLabel = new Label
-        {
-            Text = title,
-            AutoSize = true,
-            Location = new Point(0, 1),
-            Font = new Font("Segoe UI Semibold", 9.5f),
-            ForeColor = TextMain
-        };
-
-        statusLabel.AutoSize = true;
-        statusLabel.Location = new Point(0, 25);
-        statusLabel.Font = new Font("Segoe UI", 8.7f);
-        statusLabel.ForeColor = TextDim;
-
-        panel.Controls.Add(titleLabel);
-        panel.Controls.Add(statusLabel);
-        return panel;
-    }
-
     private Control BuildHelperText()
     {
         return new Label
         {
-            Text = "Ctrl/Shift selects multiple  •  Delete removes items from the queue  •  Force delete bypasses the Recycle Bin",
+            Text = "Force delete automatically unlocks locked items, retries deletion, then uses reboot scheduling if enabled in Settings.",
             Dock = DockStyle.Fill,
             ForeColor = TextFaint,
             Font = new Font("Segoe UI", 8.5f),
@@ -397,7 +329,7 @@ public sealed class MainForm : Form
 
         var version = new Label
         {
-            Text = $"Unbound {Application.ProductVersion}",
+            Text = $"Unbound {Application.ProductVersion.Split('+')[0]}",
             ForeColor = TextFaint,
             AutoSize = true,
             Anchor = AnchorStyles.Right,
@@ -411,31 +343,24 @@ public sealed class MainForm : Form
 
     private static Button MakeButton(string text, Color color, Color hoverColor)
     {
-        var button = new Button();
-        ConfigureButton(button, text, color, hoverColor, new Padding(4, 8, 4, 8));
-        return button;
-    }
+        var button = new Button
+        {
+            Text = text,
+            Dock = DockStyle.Fill,
+            Margin = new Padding(4, 8, 4, 8),
+            BackColor = color,
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI Semibold", 9.3f),
+            Cursor = Cursors.Hand,
+            FlatStyle = FlatStyle.Flat,
+            UseVisualStyleBackColor = false,
+            TabStop = true
+        };
 
-    private static void ConfigureButton(
-        Button button,
-        string text,
-        Color color,
-        Color hoverColor,
-        Padding margin)
-    {
-        button.Text = text;
-        button.Dock = DockStyle.Fill;
-        button.Margin = margin;
-        button.BackColor = color;
-        button.ForeColor = Color.White;
-        button.Font = new Font("Segoe UI Semibold", 9.3f);
-        button.Cursor = Cursors.Hand;
-        button.FlatStyle = FlatStyle.Flat;
         button.FlatAppearance.BorderSize = 0;
         button.FlatAppearance.MouseOverBackColor = hoverColor;
         button.FlatAppearance.MouseDownBackColor = ControlPaint.Dark(color, 0.06f);
-        button.UseVisualStyleBackColor = false;
-        button.TabStop = true;
+        return button;
     }
 
     private void AddFiles()
@@ -529,148 +454,6 @@ public sealed class MainForm : Form
         };
     }
 
-    private void RefreshSettingsState()
-    {
-        RefreshInstallationState();
-        RefreshExplorerState();
-    }
-
-    private void RefreshInstallationState()
-    {
-        bool installed = AppInstallation.IsInstalled();
-
-        _installStatus.Text = installed
-            ? "●  Installed — Start menu and Windows Apps entry are ready"
-            : "Portable mode — install for Start menu access and clean uninstall";
-
-        _installStatus.ForeColor = installed ? Green : TextDim;
-        _installButton.Text = installed ? "Uninstall" : "Install";
-        _installButton.BackColor = SurfaceButton;
-        _installButton.FlatAppearance.MouseOverBackColor = SurfaceHover;
-        _installButton.FlatAppearance.MouseDownBackColor = ControlPaint.Dark(SurfaceButton, 0.06f);
-    }
-
-    private void ToggleInstallation()
-    {
-        try
-        {
-            if (AppInstallation.IsInstalled())
-            {
-                DialogResult result = MessageBox.Show(
-                    this,
-                    "Uninstall Unbound for this Windows user?\n\nThis removes the Start menu shortcut, Explorer commands, Windows Apps entry, and installed program files.",
-                    "Unbound",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Question);
-
-                if (result != DialogResult.Yes)
-                    return;
-
-                bool exitRequired = AppInstallation.Uninstall();
-                _status.Text = "Unbound uninstalled";
-                RefreshSettingsState();
-
-                MessageBox.Show(
-                    this,
-                    exitRequired
-                        ? "Unbound has been uninstalled. The app will now close so Windows can remove the final program file."
-                        : "Unbound has been uninstalled.",
-                    "Unbound",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-
-                if (exitRequired)
-                    Application.Exit();
-
-                return;
-            }
-
-            string installedPath = AppInstallation.Install();
-            _status.Text = "Unbound installed";
-            RefreshSettingsState();
-
-            MessageBox.Show(
-                this,
-                "Unbound is installed for your Windows account.\n\n" +
-                $"Installed to:\n{installedPath}\n\n" +
-                "A Start menu shortcut, Windows Apps uninstall entry, and Explorer right-click commands were added.",
-                "Unbound",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Unbound",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
-        }
-    }
-
-    private void RefreshExplorerState()
-    {
-        bool installed = ExplorerIntegration.IsInstalled();
-
-        _explorerStatus.Text = installed
-            ? "●  Installed — available for every file and folder"
-            : "Not installed — adds Unlock and Force delete to Explorer";
-
-        _explorerStatus.ForeColor = installed ? Green : TextDim;
-        _explorerButton.Text = installed ? "Remove" : "Add";
-        _explorerButton.BackColor = SurfaceButton;
-        _explorerButton.FlatAppearance.MouseOverBackColor = SurfaceHover;
-        _explorerButton.FlatAppearance.MouseDownBackColor = ControlPaint.Dark(SurfaceButton, 0.06f);
-    }
-
-    private void ToggleExplorerMenu()
-    {
-        try
-        {
-            if (ExplorerIntegration.IsInstalled())
-            {
-                DialogResult result = MessageBox.Show(
-                    this,
-                    "Remove Unbound from the Explorer right-click menu?",
-                    "Unbound",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Question);
-
-                if (result != DialogResult.Yes)
-                    return;
-
-                ExplorerIntegration.Remove();
-                _status.Text = "Explorer integration removed";
-            }
-            else
-            {
-                string installedPath = ExplorerIntegration.Install();
-                _status.Text = "Explorer integration installed";
-
-                MessageBox.Show(
-                    this,
-                    "Unbound is now available when you right-click any file or folder.\n\n" +
-                    $"Explorer copy:\n{installedPath}\n\n" +
-                    "On Windows 11, the commands can appear under “Show more options”.",
-                    "Unbound",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-            }
-
-            RefreshSettingsState();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(
-                this,
-                ex.Message,
-                "Unbound",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
-        }
-    }
-
     private List<string> GetActionTargets()
     {
         return (_files.SelectedItems.Count > 0
@@ -688,10 +471,48 @@ public sealed class MainForm : Form
             return;
         }
 
-        foreach (string path in selected)
-            Unlocker.UnlockWithUi(path, this);
+        UserSettings settings = SettingsStore.Current;
+        var results = new List<UnlockResult>();
 
-        _status.Text = "Unlock operation finished";
+        foreach (string path in selected)
+        {
+            results.Add(Unlocker.Unlock(
+                path,
+                new UnlockOptions(
+                    ConfirmBeforeClosing: true,
+                    ShowProcessDetails: settings.ShowLockingApplications,
+                    ShowSummary: false,
+                    ShowNoLocksMessage: false,
+                    DialogTitle: "Unlock with Unbound"),
+                this));
+        }
+
+        int noLocks = results.Count(x => x.LockingProcesses == 0);
+        int unlocked = results.Count(x => x.Success && x.LockingProcesses > 0);
+        int cancelled = results.Count(x => x.UserCancelled);
+        int failed = results.Count - noLocks - unlocked - cancelled;
+        int graceful = results.Sum(x => x.GracefullyClosed);
+        int forced = results.Sum(x => x.ForceClosed);
+        int protectedCount = results.Sum(x => x.ProtectedProcesses);
+
+        _status.Text = $"Unlocked {unlocked}  •  No locks {noLocks}  •  Failed {failed + cancelled}";
+
+        if (settings.ShowOperationSummary)
+        {
+            MessageBox.Show(
+                this,
+                "Unlock finished.\n\n" +
+                $"Unlocked items: {unlocked}\n" +
+                $"No locks detected: {noLocks}\n" +
+                $"Cancelled: {cancelled}\n" +
+                $"Could not fully unlock: {failed}\n\n" +
+                $"Apps closed normally: {graceful}\n" +
+                $"Apps force closed: {forced}\n" +
+                $"Protected processes: {protectedCount}",
+                "Unbound",
+                MessageBoxButtons.OK,
+                failed + cancelled == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+        }
     }
 
     private void DeleteSelected()
@@ -705,7 +526,9 @@ public sealed class MainForm : Form
 
         DialogResult answer = MessageBox.Show(
             this,
-            $"Permanently delete {selected.Count} item(s)?\n\nThis bypasses the Recycle Bin and cannot be undone.",
+            $"Permanently delete {selected.Count} item(s)?\n\n" +
+            "Force delete automatically attempts to unlock items that Windows reports as in use.\n\n" +
+            "This bypasses the Recycle Bin and cannot be undone.",
             "Unbound",
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Warning);
@@ -713,65 +536,23 @@ public sealed class MainForm : Form
         if (answer != DialogResult.Yes)
             return;
 
-        int deleted = 0;
-        int scheduled = 0;
-        var failures = new List<(string Path, string Message)>();
+        UserSettings settings = SettingsStore.Current;
+        DeleteBatchResult result = DeleteCoordinator.Execute(selected, settings, this);
 
-        foreach (string path in selected)
-        {
-            try
-            {
-                FileTools.ForceDelete(path);
-                _files.Items.Remove(path);
-                deleted++;
-            }
-            catch (Exception ex)
-            {
-                bool scheduledForReboot = false;
-                string failureMessage = ex.Message;
-
-                if (_rebootDelete.Checked)
-                {
-                    try
-                    {
-                        scheduledForReboot = FileTools.ScheduleDelete(path);
-                    }
-                    catch (Exception scheduleEx)
-                    {
-                        failureMessage = scheduleEx.Message;
-                    }
-                }
-
-                if (scheduledForReboot)
-                {
-                    _files.Items.Remove(path);
-                    scheduled++;
-                }
-                else
-                {
-                    failures.Add((path, failureMessage));
-                }
-            }
-        }
+        foreach (string path in result.CompletedPaths.ToList())
+            _files.Items.Remove(path);
 
         UpdateQueueUi();
-        _status.Text = $"Deleted {deleted}  •  Reboot {scheduled}  •  Failed {failures.Count}";
+        _status.Text = result.ToStatusLine();
 
-        if (failures.Count == 0)
-            return;
-
-        string details = string.Join(
-            Environment.NewLine,
-            failures.Take(6).Select(x => $"• {Path.GetFileName(x.Path)} — {x.Message}"));
-
-        if (failures.Count > 6)
-            details += $"{Environment.NewLine}• …and {failures.Count - 6} more";
-
-        MessageBox.Show(
-            this,
-            $"Some items could not be deleted:\n\n{details}\n\nTry Unlock first, or enable delete-after-reboot.",
-            "Unbound",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Warning);
+        if (settings.ShowOperationSummary)
+        {
+            MessageBox.Show(
+                this,
+                result.ToSummaryText(),
+                "Unbound",
+                MessageBoxButtons.OK,
+                result.Failed + result.Cancelled == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+        }
     }
 }

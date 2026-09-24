@@ -58,19 +58,19 @@ Replace `YOUR_USERNAME` with your GitHub username.
 
 ### Updating an existing Unbound repository
 
-If `origin` is already configured and you are pushing this v1.1.0 update, copy these files over your existing local repository, then run:
+If `origin` is already configured and you are pushing this v1.2.0 update, copy these files over your existing local repository, then run:
 
 ```bash
 git add .
-git commit -m "Add one-click install and uninstall"
+git commit -m "Make Force delete auto-unlock and move controls to Settings"
 git push
 ```
 
 After the Build workflow passes, create the release tag:
 
 ```bash
-git tag v1.1.0
-git push origin v1.1.0
+git tag v1.2.0
+git push origin v1.2.0
 ```
 
 ## 4. Check GitHub Actions
@@ -79,13 +79,13 @@ Open the repository's **Actions** tab. The `Build` workflow should compile `win-
 
 If that workflow passes, you have an independent clean build of the repository.
 
-## 5. Create the v1.1.0 release
+## 5. Create the v1.2.0 release
 
 The release workflow is tag-driven. Run:
 
 ```bash
-git tag v1.1.0
-git push origin v1.1.0
+git tag v1.2.0
+git push origin v1.2.0
 ```
 
 GitHub Actions will build the release and create a GitHub Release with:

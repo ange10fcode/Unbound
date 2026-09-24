@@ -49,8 +49,48 @@ public static class ShellCommandRouter
 
     private static void HandleUnlock(IEnumerable<string> paths)
     {
-        foreach (string path in CleanPaths(paths))
-            Unlocker.UnlockWithUi(path);
+        List<string> targets = CleanPaths(paths).ToList();
+        if (targets.Count == 0)
+            return;
+
+        UserSettings settings = SettingsStore.Current;
+        var results = new List<UnlockResult>();
+
+        foreach (string path in targets)
+        {
+            results.Add(Unlocker.Unlock(
+                path,
+                new UnlockOptions(
+                    ConfirmBeforeClosing: true,
+                    ShowProcessDetails: settings.ShowLockingApplications,
+                    ShowSummary: false,
+                    ShowNoLocksMessage: false,
+                    DialogTitle: "Unlock with Unbound")));
+        }
+
+        if (!settings.ShowOperationSummary)
+            return;
+
+        int noLocks = results.Count(x => x.LockingProcesses == 0);
+        int unlocked = results.Count(x => x.Success && x.LockingProcesses > 0);
+        int cancelled = results.Count(x => x.UserCancelled);
+        int failed = results.Count - noLocks - unlocked - cancelled;
+        int graceful = results.Sum(x => x.GracefullyClosed);
+        int forced = results.Sum(x => x.ForceClosed);
+        int protectedCount = results.Sum(x => x.ProtectedProcesses);
+
+        MessageBox.Show(
+            "Unlock finished.\n\n" +
+            $"Unlocked items: {unlocked}\n" +
+            $"No locks detected: {noLocks}\n" +
+            $"Cancelled: {cancelled}\n" +
+            $"Could not fully unlock: {failed}\n\n" +
+            $"Apps closed normally: {graceful}\n" +
+            $"Apps force closed: {forced}\n" +
+            $"Protected processes: {protectedCount}",
+            "Unbound",
+            MessageBoxButtons.OK,
+            failed + cancelled == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
     }
 
     private static void HandleDelete(IEnumerable<string> paths)
@@ -65,7 +105,9 @@ public static class ShellCommandRouter
               (targets.Count > 8 ? $"\n• …and {targets.Count - 8} more" : string.Empty);
 
         DialogResult answer = MessageBox.Show(
-            $"Permanently delete {targets.Count} item(s)?\n\n{summary}\n\nThis cannot be undone.",
+            $"Permanently delete {targets.Count} item(s)?\n\n{summary}\n\n" +
+            "Force delete automatically attempts to unlock items that Windows reports as in use.\n\n" +
+            "This cannot be undone.",
             "Unbound",
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Warning);
@@ -73,61 +115,18 @@ public static class ShellCommandRouter
         if (answer != DialogResult.Yes)
             return;
 
-        var failures = new List<(string Path, Exception Error)>();
+        UserSettings settings = SettingsStore.Current;
+        DeleteBatchResult result = DeleteCoordinator.Execute(targets, settings);
 
-        foreach (string path in targets)
+        if (settings.ShowOperationSummary)
         {
-            try
-            {
-                FileTools.ForceDelete(path);
-            }
-            catch (Exception ex)
-            {
-                failures.Add((path, ex));
-            }
+            MessageBox.Show(
+                result.ToSummaryText(),
+                "Unbound",
+                MessageBoxButtons.OK,
+                result.Failed + result.Cancelled == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
         }
-
-        if (failures.Count == 0)
-            return;
-
-        string failedText = string.Join(
-            Environment.NewLine,
-            failures.Take(6).Select(x => $"• {Path.GetFileName(x.Path)} — {x.Error.Message}"));
-
-        DialogResult unlockAnswer = MessageBox.Show(
-            $"{failures.Count} item(s) could not be deleted:\n\n{failedText}\n\nTry to unlock them and delete again?",
-            "Unbound",
-            MessageBoxButtons.YesNo,
-            MessageBoxIcon.Warning);
-
-        if (unlockAnswer != DialogResult.Yes)
-            return;
-
-        int deletedAfterUnlock = 0;
-        int stillFailed = 0;
-
-        foreach ((string path, _) in failures)
-        {
-            Unlocker.UnlockWithUi(path);
-
-            try
-            {
-                FileTools.ForceDelete(path);
-                deletedAfterUnlock++;
-            }
-            catch
-            {
-                stillFailed++;
-            }
-        }
-
-        MessageBox.Show(
-            $"Retry finished.\n\nDeleted after unlock: {deletedAfterUnlock}\nStill failed: {stillFailed}",
-            "Unbound",
-            MessageBoxButtons.OK,
-            stillFailed == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
     }
-
 
     private static void HandleInstall()
     {

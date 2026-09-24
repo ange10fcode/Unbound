@@ -9,6 +9,25 @@ using System.Windows.Forms;
 
 namespace Unbound.Core;
 
+public sealed record UnlockOptions(
+    bool ConfirmBeforeClosing,
+    bool ShowProcessDetails,
+    bool ShowSummary,
+    bool ShowNoLocksMessage,
+    string DialogTitle);
+
+public sealed record UnlockResult(
+    bool Success,
+    bool UserCancelled,
+    int LockingProcesses,
+    int GracefullyClosed,
+    int ForceClosed,
+    int Failed,
+    int ProtectedProcesses)
+{
+    public int ClosedProcesses => GracefullyClosed + ForceClosed;
+}
+
 public static class Unlocker
 {
     private const int ErrorMoreData = 234;
@@ -98,19 +117,47 @@ public static class Unlocker
         [In, Out] RmProcessInfo[]? affectedApps,
         ref uint rebootReasons);
 
-    public static bool UnlockWithUi(string path, IWin32Window? owner = null)
+    public static UnlockResult UnlockWithUi(string path, IWin32Window? owner = null)
+    {
+        UserSettings settings = SettingsStore.Current;
+        return Unlock(
+            path,
+            new UnlockOptions(
+                ConfirmBeforeClosing: true,
+                ShowProcessDetails: settings.ShowLockingApplications,
+                ShowSummary: settings.ShowOperationSummary,
+                ShowNoLocksMessage: true,
+                DialogTitle: "Unlock with Unbound"),
+            owner);
+    }
+
+    public static UnlockResult Unlock(
+        string path,
+        UnlockOptions options,
+        IWin32Window? owner = null)
     {
         List<LockingProcessInfo> lockingProcesses = FindLockingProcesses(path);
 
         if (lockingProcesses.Count == 0)
         {
-            MessageBox.Show(
-                owner,
-                $"No locking application was found.\n\n{path}",
-                "Unbound",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-            return true;
+            if (options.ShowSummary && options.ShowNoLocksMessage)
+            {
+                MessageBox.Show(
+                    owner,
+                    $"No locking application was found.\n\n{path}",
+                    "Unbound",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+
+            return new UnlockResult(
+                Success: true,
+                UserCancelled: false,
+                LockingProcesses: 0,
+                GracefullyClosed: 0,
+                ForceClosed: 0,
+                Failed: 0,
+                ProtectedProcesses: 0);
         }
 
         var protectedProcesses = new List<LockingProcessInfo>();
@@ -127,37 +174,59 @@ public static class Unlocker
 
         if (closableProcesses.Count == 0)
         {
-            MessageBox.Show(
-                owner,
-                "The item is locked only by protected Windows processes. " +
-                "Unbound will not terminate those processes automatically.",
-                "Unbound",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
-            return false;
+            if (options.ShowSummary)
+            {
+                MessageBox.Show(
+                    owner,
+                    "The item is locked only by protected Windows processes. " +
+                    "Unbound will not terminate those processes automatically.",
+                    "Unbound",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+
+            return new UnlockResult(
+                Success: false,
+                UserCancelled: false,
+                LockingProcesses: lockingProcesses.Count,
+                GracefullyClosed: 0,
+                ForceClosed: 0,
+                Failed: 0,
+                ProtectedProcesses: protectedProcesses.Count);
         }
 
-        string processList = string.Join(
-            Environment.NewLine,
-            closableProcesses.Select(p => $"• {FormatProcess(p)}"));
+        if (options.ConfirmBeforeClosing)
+        {
+            string processDescription = options.ShowProcessDetails
+                ? string.Join(Environment.NewLine, closableProcesses.Select(p => $"• {FormatProcess(p)}"))
+                : $"{closableProcesses.Count} application(s) are using this item.";
 
-        string protectedNote = protectedProcesses.Count == 0
-            ? string.Empty
-            : $"\n\nProtected Windows processes detected: {protectedProcesses.Count}. " +
-              "They will not be terminated.";
+            string protectedNote = protectedProcesses.Count == 0
+                ? string.Empty
+                : $"\n\nProtected Windows processes detected: {protectedProcesses.Count}. " +
+                  "They will not be terminated.";
 
-        DialogResult approval = MessageBox.Show(
-            owner,
-            "The following application(s) are using this item:\n\n" +
-            processList +
-            "\n\nUnbound will first ask them to close normally." +
-            protectedNote,
-            "Unlock with Unbound",
-            MessageBoxButtons.YesNo,
-            MessageBoxIcon.Warning);
+            DialogResult approval = MessageBox.Show(
+                owner,
+                processDescription +
+                "\n\nUnbound will first ask the locking application(s) to close normally." +
+                protectedNote,
+                options.DialogTitle,
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
 
-        if (approval != DialogResult.Yes)
-            return false;
+            if (approval != DialogResult.Yes)
+            {
+                return new UnlockResult(
+                    Success: false,
+                    UserCancelled: true,
+                    LockingProcesses: lockingProcesses.Count,
+                    GracefullyClosed: 0,
+                    ForceClosed: 0,
+                    Failed: closableProcesses.Count,
+                    ProtectedProcesses: protectedProcesses.Count);
+            }
+        }
 
         var stillRunning = new List<LockingProcessInfo>();
         int gracefullyClosed = 0;
@@ -197,15 +266,14 @@ public static class Unlocker
 
         if (stillRunning.Count > 0)
         {
-            string forceList = string.Join(
-                Environment.NewLine,
-                stillRunning.Select(p => $"• {FormatProcess(p)}"));
+            string forceDescription = options.ShowProcessDetails
+                ? string.Join(Environment.NewLine, stillRunning.Select(p => $"• {FormatProcess(p)}"))
+                : $"{stillRunning.Count} application(s) did not close normally.";
 
             DialogResult forceApproval = MessageBox.Show(
                 owner,
-                "These application(s) did not close normally:\n\n" +
-                forceList +
-                "\n\nForce terminate them? Unsaved work in those applications may be lost.",
+                forceDescription +
+                "\n\nForce terminate the remaining application(s)? Unsaved work may be lost.",
                 "Force unlock",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
@@ -227,6 +295,7 @@ public static class Unlocker
                                 process.Kill(entireProcessTree: true);
                                 process.WaitForExit(3000);
                             }
+
                             forceClosed++;
                         }
                         catch
@@ -243,19 +312,37 @@ public static class Unlocker
         }
 
         bool success = failed == 0 && protectedProcesses.Count == 0;
+        var result = new UnlockResult(
+            Success: success,
+            UserCancelled: false,
+            LockingProcesses: lockingProcesses.Count,
+            GracefullyClosed: gracefullyClosed,
+            ForceClosed: forceClosed,
+            Failed: failed,
+            ProtectedProcesses: protectedProcesses.Count);
 
-        MessageBox.Show(
-            owner,
-            $"Unlock attempt finished.\n\n" +
-            $"Closed normally: {gracefullyClosed}\n" +
-            $"Force closed: {forceClosed}\n" +
-            $"Could not close: {failed}\n" +
-            $"Protected: {protectedProcesses.Count}",
-            "Unbound",
-            MessageBoxButtons.OK,
-            success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+        if (options.ShowSummary)
+        {
+            MessageBox.Show(
+                owner,
+                BuildSummary(result),
+                "Unbound",
+                MessageBoxButtons.OK,
+                success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+        }
 
-        return success;
+        return result;
+    }
+
+    public static string BuildSummary(UnlockResult result)
+    {
+        return
+            "Unlock finished.\n\n" +
+            $"Locking apps detected: {result.LockingProcesses}\n" +
+            $"Closed normally: {result.GracefullyClosed}\n" +
+            $"Force closed: {result.ForceClosed}\n" +
+            $"Could not close: {result.Failed}\n" +
+            $"Protected: {result.ProtectedProcesses}";
     }
 
     private static List<LockingProcessInfo> FindLockingProcesses(string path)

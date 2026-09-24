@@ -2,6 +2,30 @@
 
 All notable changes to Unbound are documented here.
 
+## [1.2.0] - 2026-09-23
+
+### Added
+
+- Dedicated **Settings** window with persistent per-user behavior preferences.
+- Toggle to confirm before Force delete automatically closes locking applications.
+- Toggle to show or hide locking application names and PIDs in confirmations.
+- Toggle to show or hide final unlock/delete statistics dialogs.
+- Delete-after-reboot preference moved into Settings.
+
+### Changed
+
+- **Force delete now performs the full workflow automatically:** normal delete → detect/unlock locking apps → retry delete → optional delete-after-reboot.
+- Removed the old “Try Unlock first” dead-end and the extra “unlock and delete again?” step.
+- App installation and Explorer integration controls moved off the main screen and into Settings.
+- Main window is smaller and focused only on the queue and the four primary actions.
+- Explorer right-click **Force delete with Unbound** now uses the same automatic unlock-and-retry workflow as the main app.
+- Operation statistics are aggregated across multi-item actions instead of showing a separate final dialog for every file.
+
+### Safety
+
+- Force termination still requires explicit confirmation when an application refuses to close normally.
+- Protected Windows processes and Unbound's own running/installed files remain guarded.
+
 ## [1.1.0] - 2026-09-23
 
 ### Added

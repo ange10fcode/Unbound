@@ -12,10 +12,11 @@
 
 - Drag files and folders into a clean local queue.
 - Detect locking processes with the Windows Restart Manager API.
+- Force-delete in one flow: try normal deletion, automatically detect and unlock locking apps, retry deletion, then optionally schedule removal after reboot.
 - Ask applications to close normally before offering force termination.
 - Refuse to automatically terminate protected Windows processes.
 - Force-delete files, folders, and read-only items.
-- Optionally schedule locked items for deletion after reboot.
+- Configure auto-unlock confirmation, locking-process details, final statistics, and delete-after-reboot behavior in **Settings**.
 - Install Unbound for the current Windows user with one click — no administrator prompt required.
 - Add a Start menu shortcut and a normal **Settings → Apps** uninstall entry.
 - Add **Unlock with Unbound** and **Force delete with Unbound** to Explorer for **every file and folder**.
@@ -27,7 +28,7 @@
 
 For normal use, download the current Windows package from the repository's **Releases** page and run `Unbound.exe`.
 
-You can keep using it as a portable app, or click **Install** in Unbound to install it for your Windows account. The installed copy is placed in:
+You can keep using it as a portable app, or open **Settings → Windows integration → Install** to install it for your Windows account. The installed copy is placed in:
 
 ```text
 %LOCALAPPDATA%\Programs\Unbound\Unbound.exe
@@ -78,7 +79,7 @@ You can also use PowerShell:
 
 ## Install and uninstall
 
-The **App installation** row in Unbound provides one-click per-user installation and uninstall.
+Open **Settings** from the main window. The **Windows integration** section provides one-click per-user installation/uninstall and Explorer menu controls.
 
 Install adds:
 
@@ -98,7 +99,7 @@ Unbound.exe --uninstall
 
 ## Explorer integration
 
-Explorer integration can also be added or removed independently from the app. If you add Explorer integration while running the portable build, Unbound installs a stable per-user copy automatically so the right-click entries do not break when the downloaded EXE moves.
+Explorer integration can also be added or removed independently from **Settings**. If you add Explorer integration while running the portable build, Unbound installs a stable per-user copy automatically so the right-click entries do not break when the downloaded EXE moves.
 
 The per-user registry entries are:
 
@@ -117,6 +118,19 @@ Explorer commands can also be managed from a terminal:
 Unbound.exe --install-menu
 Unbound.exe --remove-menu
 ```
+
+## Behavior settings
+
+Unbound v1.2 keeps the main window focused on files and actions. Open **Settings** to configure:
+
+- **Ask before automatic unlock during Force delete** — when enabled, Unbound asks before closing locking apps after a delete failure.
+- **Show locking application names and PIDs** — controls whether process details are shown in confirmation dialogs.
+- **Show operation summary when finished** — toggles the final statistics dialog. The main status bar still updates either way.
+- **Schedule stubborn items for deletion after reboot** — used only when immediate deletion still fails after unlocking.
+
+Force delete always starts with a normal deletion attempt. If Windows reports the item as locked, Unbound automatically runs the unlock workflow and retries the delete. There is no separate “Unlock first” step.
+
+Settings are stored per Windows user in `%APPDATA%\Unbound\settings.json`.
 
 ## Safety
 

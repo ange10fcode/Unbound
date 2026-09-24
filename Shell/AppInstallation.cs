@@ -6,6 +6,7 @@ using System.Runtime.InteropServices.ComTypes;
 using System.Text;
 using System.Windows.Forms;
 using Microsoft.Win32;
+using Unbound.Core;
 
 namespace Unbound.Shell;
 
@@ -103,13 +104,15 @@ public static class AppInstallation
             LaunchCleanupScript(
                 Environment.ProcessId,
                 InstallDirectory,
-                LegacyInstallDirectory);
+                LegacyInstallDirectory,
+                SettingsStore.SettingsDirectory);
 
             return true;
         }
 
         TryDeleteDirectory(InstallDirectory);
         TryDeleteDirectory(LegacyInstallDirectory);
+        TryDeleteDirectory(SettingsStore.SettingsDirectory);
         return false;
     }
 
@@ -140,7 +143,7 @@ public static class AppInstallation
         string quotedExe = $"\"{exe}\"";
 
         key.SetValue("DisplayName", "Unbound", RegistryValueKind.String);
-        key.SetValue("DisplayVersion", Application.ProductVersion, RegistryValueKind.String);
+        key.SetValue("DisplayVersion", Application.ProductVersion.Split('+')[0], RegistryValueKind.String);
         key.SetValue("DisplayIcon", $"{quotedExe},0", RegistryValueKind.String);
         key.SetValue("Publisher", "Unbound contributors", RegistryValueKind.String);
         key.SetValue("InstallLocation", InstallDirectory, RegistryValueKind.String);
